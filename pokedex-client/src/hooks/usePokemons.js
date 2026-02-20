@@ -15,24 +15,29 @@ export const usePokemons = (currentUrl, searchQuery) => {
       setError(false);
       try {
         if (searchQuery) {
-          // Arama varsa sadece o pokemonu çek
+          // ARAMA DURUMU: Zaten tüm detaylar tek istekte geliyor
           const response = await axios.get(`https://pokeapi.co/api/v2/pokemon/${searchQuery.toLowerCase()}`);
-          setPokemons([{ 
-            name: response.data.name, 
-            url: `https://pokeapi.co/api/v2/pokemon/${response.data.id}/` 
-          }]);
+          setPokemons([response.data]); // Sadece isim/url değil, tüm veriyi dizi içinde kaydediyoruz
           setNextUrl(null);
           setPrevUrl(null);
         } else {
-          // Arama yoksa mevcut sayfadaki listeyi çek
+          // LİSTE DURUMU: 20'lik listeyi çekiyoruz
           const response = await axios.get(currentUrl);
           setNextUrl(response.data.next);
           setPrevUrl(response.data.previous);
-          setPokemons(response.data.results);
+
+          // N+1 ÇÖZÜMÜ: Gelen 20 linke paralel (aynı anda) istek atıyoruz
+          const detailedPokemons = await Promise.all(
+            response.data.results.map(async (pokemon) => {
+              const res = await axios.get(pokemon.url);
+              return res.data; // Her bir pokemonun tüm detayları
+            })
+          );
+          
+          setPokemons(detailedPokemons); // Detaylı listeyi state'e kaydediyoruz
         }
       } catch (err) {
-        // Hata durumunu konsola yazdırmak iyi bir alışkanlıktır
-        console.error("Veri çekilirken hata oluştu:", err.message);
+        console.error("Veri çekilirken hata:", err.message);
         setError(true);
         setPokemons([]);
       } finally {
@@ -43,6 +48,5 @@ export const usePokemons = (currentUrl, searchQuery) => {
     fetchPokemons();
   }, [currentUrl, searchQuery]);
 
-  // App.jsx'in ihtiyacı olan her şeyi dışarı fırlatıyoruz
   return { pokemons, loading, error, nextUrl, prevUrl };
 };
