@@ -10,7 +10,7 @@ export const usePokemons = (currentUrl, searchQuery) => {
   const [prevUrl, setPrevUrl] = useState(null);
 
   useEffect(() => {
-    // 1. Controller'ı oluşturuyoruz
+    // 1. Controller'ı oluşturuyoruz (Emniyet Kemerimiz)
     const controller = new AbortController();
 
     const fetchPokemons = async () => {
@@ -18,7 +18,7 @@ export const usePokemons = (currentUrl, searchQuery) => {
       setError(false);
       try {
         if (searchQuery) {
-          // 2. Axios'a "Eğer bu sinyal abort edilirse, isteği anında kes" diyoruz
+          // ARAMA DURUMU: Tek bir istek
           const response = await axios.get(
             `https://pokeapi.co/api/v2/pokemon/${searchQuery.toLowerCase()}`,
             { signal: controller.signal } 
@@ -27,22 +27,43 @@ export const usePokemons = (currentUrl, searchQuery) => {
           setNextUrl(null);
           setPrevUrl(null);
         } else {
+          // LİSTE DURUMU: Sayfa verisini çekiyoruz
           const response = await axios.get(currentUrl, { signal: controller.signal });
           setNextUrl(response.data.next);
           setPrevUrl(response.data.previous);
 
-          const detailedPokemons = await Promise.all(
-            response.data.results.map(async (pokemon) => {
-              // Promise.all içindeki iç isteklere de sinyali vermeliyiz!
-              const res = await axios.get(pokemon.url, { signal: controller.signal });
-              return res.data;
-            })
-          );
+          // --- CONCURRENCY POOL (EŞZAMANLILIK HAVUZU) ---
+          const limit = 10; // Havuz Kapasitesi: Aynı anda en fazla 10 istek uçabilir
+          const allPromises = []; // Sonuçları (sırayı bozmadan) tutacağımız dizi
+          const activeTasks = new Set(); // O an aktif çalışanları takip eden havuz
+
+          for (const pokemon of response.data.results) {
+            // 1. İsteği başlat (await koymuyoruz, anında fırlatıyoruz)
+            // AbortController sinyalini her bir iç isteğe veriyoruz!
+            const requestPromise = axios.get(pokemon.url, { signal: controller.signal })
+              .then(res => res.data);
+            
+            // 2. Sıralama bozulmasın diye ana listeye ekliyoruz
+            allPromises.push(requestPromise);
+
+            // 3. Havuz kontrolü: İstek bitince kendini havuzdan silsin (Yer açılsın)
+            const task = requestPromise.finally(() => activeTasks.delete(task));
+            activeTasks.add(task);
+
+            // 4. Havuz dolduysa (10 olduysa), içlerinden EN HIZLI olanın bitmesini bekle
+            if (activeTasks.size >= limit) {
+              await Promise.race(activeTasks);
+            }
+          }
+
+          // 5. Döngü bitti ama havuzda hala son birkaç istek kalmış olabilir.
+          // Hepsinin tamamen bitmesini bekliyoruz.
+          const detailedPokemons = await Promise.all(allPromises);
           
           setPokemons(detailedPokemons);
         }
       } catch (err) {
-        // 3. Hata Yönetimi: İstek BİZİM tarafımızdan mı iptal edildi, yoksa gerçekten hata mı var?
+        // Hata Yönetimi: İstek BİZİM tarafımızdan mı iptal edildi?
         if (axios.isCancel(err)) {
           console.log("Önceki istek başarıyla iptal edildi, yarış durumu engellendi!");
         } else {
@@ -51,15 +72,13 @@ export const usePokemons = (currentUrl, searchQuery) => {
           setPokemons([]);
         }
       } finally {
-        // Loading'i kapatıyoruz.
         setLoading(false);
       }
     };
 
     fetchPokemons();
 
-    // 4. CLEANUP: Bu useEffect yeniden çalışmadan hemen önce (veya bileşen ekrandan silinmeden önce) çalışır.
-    // Eğer hala havada uçan bir API isteği varsa, onu vurup düşürür!
+    // CLEANUP: Uygulama yeni bir isteğe geçerse eski istekleri havada vurur
     return () => {
       controller.abort();
     };
