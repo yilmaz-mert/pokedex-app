@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { usePokemons } from './hooks/usePokemons'; // Custom Hook'umuzu import ettik
+import { useState, useEffect } from 'react';
+import { usePokemons } from './hooks/usePokemons'; 
 import PokemonCard from './components/PokemonCard';
 import Pagination from './components/Pagination';
 import SearchBar from './components/SearchBar';
@@ -7,10 +7,27 @@ import SearchBar from './components/SearchBar';
 function App() {
   // Uygulamanın navigasyon ve arama durumlarını (state) burada yönetiyoruz
   const [currentUrl, setCurrentUrl] = useState('https://pokeapi.co/api/v2/pokemon?limit=20');
+  
+  // 1. Kullanıcının klavyede anlık olarak yazdığı kelime
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // 2. 500ms bekletilmiş, API'ye gerçekten gönderilecek kelime
+  const [debouncedQuery, setDebouncedQuery] = useState('');
 
-  // Tüm veri çekme mantığını, yüklenme durumunu ve hataları tek satırda Hook'tan alıyoruz
-  const { pokemons, loading, error, nextUrl, prevUrl } = usePokemons(currentUrl, searchQuery);
+  // --- DEBOUNCE (BEKLETME) MANTIĞI ---
+  useEffect(() => {
+    // Kullanıcı her harf yazdığında 500 milisaniyelik bir sayaç başlat
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 500);
+
+    // CLEANUP: Eğer 500ms dolmadan kullanıcı yeni bir harf yazarsa, 
+    // eski sayacı iptal et ki API'ye yarım kalan kelime gitmesin.
+    return () => clearTimeout(timer);
+  }, [searchQuery]); // searchQuery her değiştiğinde bu efekti tetikle
+
+  // Custom Hook'umuza anlık kelimeyi değil, debounced (bekletilmiş) kelimeyi veriyoruz!
+  const { pokemons, loading, error, nextUrl, prevUrl } = usePokemons(currentUrl, debouncedQuery);
 
   // Arama çubuğundan gelen kelimeyi state'e kaydeder
   const handleSearch = (query) => {
@@ -20,6 +37,7 @@ function App() {
   // Aramayı iptal edip ana listeye döndürür
   const clearSearch = () => {
     setSearchQuery('');
+    setDebouncedQuery(''); // İptal durumunda ikisini de sıfırlıyoruz
     setCurrentUrl('https://pokeapi.co/api/v2/pokemon?limit=20');
   };
 
@@ -37,8 +55,8 @@ function App() {
         {/* Arama Bileşeni */}
         <SearchBar onSearch={handleSearch} />
 
-        {/* Arama modundaysak "Geri Dön" butonunu göster */}
-        {searchQuery && (
+        {/* UI'da "Geri Dön" butonunu göstermek için debouncedQuery kullanıyoruz */}
+        {debouncedQuery && (
           <div className="text-center mb-6">
             <button onClick={clearSearch} className="text-blue-500 font-semibold hover:underline">
               &larr; Tüm Pokemonlara Dön
@@ -60,8 +78,8 @@ function App() {
           <>
             {/* Pokemon Listesi */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {pokemons.map((pokemon, index) => (
-                <PokemonCard key={pokemon.name || index} pokemon={pokemon} />
+              {pokemons.map((pokemon) => (
+                <PokemonCard key={pokemon.name} pokemon={pokemon} />
               ))}
             </div>
 

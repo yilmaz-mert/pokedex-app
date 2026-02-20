@@ -15,6 +15,7 @@ export const usePokemons = (currentUrl, searchQuery) => {
       setError(false);
       try {
         if (searchQuery) {
+          // Arama varsa sadece o pokemonu çek
           const response = await axios.get(`https://pokeapi.co/api/v2/pokemon/${searchQuery.toLowerCase()}`);
           setPokemons([{ 
             name: response.data.name, 
@@ -23,12 +24,15 @@ export const usePokemons = (currentUrl, searchQuery) => {
           setNextUrl(null);
           setPrevUrl(null);
         } else {
+          // Arama yoksa mevcut sayfadaki listeyi çek
           const response = await axios.get(currentUrl);
           setNextUrl(response.data.next);
           setPrevUrl(response.data.previous);
           setPokemons(response.data.results);
         }
-      } catch {
+      } catch (err) {
+        // Hata durumunu konsola yazdırmak iyi bir alışkanlıktır
+        console.error("Veri çekilirken hata oluştu:", err.message);
         setError(true);
         setPokemons([]);
       } finally {
