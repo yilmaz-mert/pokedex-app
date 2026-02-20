@@ -1,22 +1,34 @@
 // components/PokemonCard.jsx
-import React from 'react'; // useEffect ve axios'a artık gerek yok!
+import React from 'react';
 
-// Gelen 'pokemon' prop'u artık detayların TA KENDİSİ.
 export default function PokemonCard({ pokemon }) {
-  // Veri zaten dışarıdan dolu geldiği için 'loading' durumuna da gerek kalmadı.
-  // Direk verileri ekrana basıyoruz.
+  // 1. Eğer resim yüklenemezse göstereceğimiz varsayılan resim (Poketop)
+  const fallbackImage = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png";
+
+  // 2. Güvenli zincirleme (Optional Chaining: '?.' kullanımı)
+  // Eğer sprites veya other objesi hiç yoksa uygulama çökmez, direkt undefined döner.
+  // Biz de '||' (VEYA) operatörüyle undefined durumunda baştan fallbackImage'i atarız.
+  const imageUrl = pokemon?.sprites?.other?.['official-artwork']?.front_default || fallbackImage;
+
+  // 3. Resim linki var ama URL 404 (Not Found) verirse çalışacak fonksiyon
+  const handleImageError = (e) => {
+    e.currentTarget.src = fallbackImage;
+    // ÖNEMLİ: Eğer fallback resmi de yüklenemezse sonsuz döngüye girmesin diye onError'u null yapıyoruz.
+    e.currentTarget.onerror = null; 
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-md p-6 flex flex-col items-center hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-      {/* Pokemon ID Numarası */}
+      
       <span className="text-gray-400 text-sm font-bold w-full text-right">
         #{pokemon.id.toString().padStart(3, '0')}
       </span>
 
-      {/* Resim */}
+      {/* 4. Resim etiketimizi güncelledik */}
       <img
-        src={pokemon.sprites.other['official-artwork'].front_default}
+        src={imageUrl}
         alt={pokemon.name}
+        onError={handleImageError} // Hata yakalayıcıyı ekledik
         className="w-32 h-32 object-contain mb-4 drop-shadow-lg"
       />
       
@@ -24,11 +36,10 @@ export default function PokemonCard({ pokemon }) {
         {pokemon.name}
       </h2>
 
-      {/* Pokemon Türleri */}
       <div className="flex gap-2">
-        {pokemon.types.map((typeInfo, index) => (
+        {pokemon.types.map((typeInfo) => (
           <span 
-            key={index} 
+            key={typeInfo.type.name} // index yerine benzersiz tipi kullandık
             className="px-3 py-1 bg-gray-100 text-gray-600 border border-gray-200 text-xs font-bold rounded-full capitalize"
           >
             {typeInfo.type.name}
